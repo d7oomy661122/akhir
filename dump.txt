@@ -1,0 +1,327 @@
+1:import { useEffect, useRef, useState, useCallback } from 'react';
+2:import { Match, Stream } from '../types';
+3:import Hls from 'hls.js';
+4:import 'plyr/dist/plyr.css';
+5:import Plyr from 'plyr';
+6:import { AlertCircle, ArrowRight, Loader2, RotateCw } from 'lucide-react';
+8:interface PlayerPageProps {
+9:  match: Match;
+10:  stream: Stream;
+11:  lang: string;
+12:  onBack?: () => void;
+13:  onServerChange?: (stream: Stream) => void;
+14:}
+16:export default function PlayerPage({ match, stream, lang, onBack }: PlayerPageProps) {
+17:  const videoRef = useRef<HTMLVideoElement>(null);
+18:  const containerRef = useRef<HTMLDivElement>(null);
+19:  const plyrRef = useRef<Plyr | null>(null);
+20:  const hlsRef = useRef<Hls | null>(null);
+21:  
+22:  const [servers, setServers] = useState<Stream[]>([]);
+23:  const [activeServer, setActiveServer] = useState<Stream>(stream);
+24:  const [loading, setLoading] = useState(true);
+25:  const [error, setError] = useState<string | null>(null);
+26:  const [playerClicks, setPlayerClicks] = useState(0);
+28:  // Load all servers for this match
+29:  useEffect(() => {
+30:    fetch('/servers.json?t=' + new Date().getTime())
+31:      .then(res => res.json())
+32:      .then(data => {
+33:         const matchData = data.matches.find((m: any) => {
+34:            const mHome = m.homeTeam.toLowerCase().trim();
+35:            const mAway = m.awayTeam.toLowerCase().trim();
+36:            const home = match.homeTeam.name.toLowerCase().trim();
+37:            const away = match.awayTeam.name.toLowerCase().trim();
+38:            return (mHome === home && mAway === away) || (mHome === away && mAway === home);
+39:         });
+40:         
+41:         if (matchData && matchData.servers) {
+42:            setServers(matchData.servers);
+43:         } else {
+44:            setServers(match.streams || [stream]);
+45:         }
+46:      })
+47:      .catch(() => {
+48:         setServers(match.streams || [stream]);
+49:      });
+50:  }, [match]);
+52:  // Helper to determine stream type
+53:  const getStreamType = (url: string) => {
+54:    const l = url.toLowerCase();
+55:    if (l.includes('.m3u8')) return 'hls';
+56:    if (l.includes('youtube.com') || l.includes('youtu.be')) return 'youtube';
+57:    if (l.includes('dailymotion.com')) return 'dailymotion';
+58:    if (l.includes('.mp4') || l.includes('.webm')) return 'mp4';
+59:    return 'iframe';
+60:  };
+62:  const currentType = getStreamType(activeServer.url);
+64:  // Optimized HLS initialization
+65:  const initializeHls = useCallback(() => {
+66:    if (!videoRef.current || currentType !== 'hls') return;
+67:    
+68:    const videoElement = videoRef.current;
+69:    
+70:    if (Hls.isSupported()) {
+71:      const hls = new Hls({
+72:        enableWorker: true, // استخدام threading لتحسين الأداء
+73:        lowLatencyMode: true, // تقليل زمن الوصول للبث المباشر
+74:        backBufferLength: 30, // تقليل حجم المخزن المؤقت لتقليل استهلاك الذاكرة
+75:        liveSyncDurationCount: 3,
+76:        // إعدادات إضافية لتحسين التقطعات
+77:        manifestLoadingTimeOut: 10000,
+78:        manifestLoadingMaxRetry: 3,
+79:        levelLoadingTimeOut: 10000,
+80:        levelLoadingMaxRetry: 3,
+81:        fragLoadingTimeOut: 20000,
+82:        fragLoadingMaxRetry: 3,
+83:        startPosition: -1, // البدء من البث المباشر
+84:        debug: false,
+85:      });
+86:      
+87:      hlsRef.current = hls;
+88:      
+89:      hls.loadSource(activeServer.url);
+90:      hls.attachMedia(videoElement);
+91:      
+92:      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+93:        setLoading(false);
+94:        // تشغيل الفيديو تلقائيًا بعد التحميل
+95:        videoElement.play().catch(err => console.warn('Autoplay failed:', err));
+96:      });
+97:      
+98:      hls.on(Hls.Events.ERROR, (event, data) => {
+99:        if (data.fatal) {
+100:          setError(`فشل تحميل البث: ${data.type}`);
+101:          setLoading(false);
+102:        } else {
+103:          console.warn('HLS non-fatal error:', data);
+104:        }
+105:      });
+106:      
+107:      return () => {
+108:        hls.destroy();
+109:        hlsRef.current = null;
+110:      };
+111:    } 
+112:    // Native HLS support (Safari)
+113:    else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+114:      videoElement.src = activeServer.url;
+115:      videoElement.addEventListener('loadedmetadata', () => {
+116:        setLoading(false);
+117:        videoElement.play().catch(() => {});
+118:      });
+119:      videoElement.addEventListener('error', () => {
+120:        setError('فشل تشغيل البث بشكل أصلي');
+121:        setLoading(false);
+122:      });
+123:    } 
+124:    else {
+125:      setError('متصفحك لا يدعم تشغيل بث HLS');
+126:      setLoading(false);
+127:    }
+128:  }, [activeServer.url, currentType]);
+130:  // Initialize Plyr player and handle different types
+131:  useEffect(() => {
+132:    setLoading(true);
+133:    setError(null);
+134:    
+135:    // 1. التحقق مما إذا كان يجب تهيئة HLS أولاً
+136:    if (currentType === 'hls') {
+137:      const cleanupHls = initializeHls();
+138:      return cleanupHls;
+139:    }
+140:    
+141:    // 2. التعامل مع أنواع أخرى باستخدام Plyr أو iframe
+142:    if (!videoRef.current) return;
+143:    const videoElement = videoRef.current;
+144:    
+145:    // إذا كان المقطع مباشر (mp4) أو مدعوم بشكل أصلي
+146:    if (currentType === 'mp4' || videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+147:      videoElement.src = activeServer.url;
+148:    }
+149:    
+150:    // إعدادات Plyr الأساسية مع تحسينات للبث المباشر
+151:    const defaultOptions: Plyr.Options = {
+152:      controls: [
+153:        'play-large', 'play', 'progress', 'current-time', 'mute', 
+154:        'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'
+155:      ],
+156:      settings: ['quality', 'speed'],
+157:      i18n: lang === 'ar' ? {
+158:        speed: 'السرعة',
+159:        quality: 'الجودة',
+160:        play: 'تشغيل',
+161:        pause: 'إيقاف',
+162:        mute: 'كتم الصوت',
+163:        unmute: 'تفعيل الصوت',
+164:        enterFullscreen: 'ملء الشاشة',
+165:        exitFullscreen: 'إنهاء ملء الشاشة',
+166:        settings: 'الإعدادات'
+167:      } : undefined,
+168:      autoplay: true,
+169:      debug: false
+170:    };
+171:    
+172:    // تهيئة Plyr
+173:    plyrRef.current = new Plyr(videoElement, defaultOptions);
+174:    
+175:    const handleCanPlay = () => {
+176:      setLoading(false);
+177:    };
+178:    
+179:    const handleError = () => {
+180:      setError('فشل في تحميل الفيديو');
+181:      setLoading(false);
+182:    };
+183:    
+184:    videoElement.addEventListener('canplay', handleCanPlay);
+185:    videoElement.addEventListener('error', handleError);
+186:    
+187:    return () => {
+188:      if (plyrRef.current) {
+189:        plyrRef.current.destroy();
+190:      }
+191:      videoElement.removeEventListener('canplay', handleCanPlay);
+192:      videoElement.removeEventListener('error', handleError);
+193:    };
+194:  }, [activeServer.url, currentType, lang, initializeHls]);
+196:  const handleRetry = () => {
+197:    // إعادة المحاولة عن طريق إعادة تهيئة نفس السيرفر
+198:    setActiveServer({ ...activeServer });
+199:  };
+201:  const renderIframe = () => {
+202:    let srcUrl = activeServer.url;
+203:    
+204:    if (currentType === 'youtube') {
+205:      let vId = '';
+206:      if (srcUrl.includes('youtube.com/watch?v=')) {
+207:        vId = srcUrl.split('v=')[1]?.split('&')[0];
+208:      } else if (srcUrl.includes('youtu.be/')) {
+209:        vId = srcUrl.split('youtu.be/')[1]?.split('?')[0];
+210:      }
+211:      srcUrl = `https://www.youtube.com/embed/${vId}?autoplay=1&rel=0`;
+212:    }
+213:    
+214:    return (
+215:      <iframe 
+216:        src={srcUrl}
+217:        className="absolute inset-0 w-full h-full border-0 shadow-lg bg-black"
+218:        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+219:        allowFullScreen
+220:        onLoad={() => setLoading(false)}
+221:        onError={() => {
+222:          setError('فشل تحميل الإطار الخارجي');
+223:          setLoading(false);
+224:        }}
+225:      />
+226:    );
+227:  };
+229:  return (
+230:    <div className="fixed inset-0 w-[100vw] h-[100dvh] bg-[#0a0e17] overflow-hidden z-[100] flex flex-col font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+231:      {/* Top Header Navigation */}
+232:      <header className="h-[60px] shrink-0 bg-[#0a0e17] border-b border-white/5 flex items-center justify-between px-4 relative z-10">
+233:         <div className="flex items-center gap-3">
+234:            <button onClick={onBack} className={`w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer text-white ${lang === 'en' ? 'rotate-180' : ''}`}>
+235:               <ArrowRight className="w-5 h-5" />
+236:            </button>
+237:            <span className="text-white font-bold tracking-wider">
+238:              {match.homeTeam.name} {lang === 'ar' ? 'ضد' : 'VS'} {match.awayTeam.name}
+239:            </span>
+240:         </div>
+241:      </header>
+242:      
+243:      {/* Player Container */}
+244:      <div className="flex-1 w-full bg-[#000000] relative flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+245:         {/* Ad Click Overlay (only for first 3 clicks) */}
+246:         {playerClicks < 3 && (
+247:            <div 
+248:               className="absolute inset-0 z-30 cursor-pointer" 
+249:               onClick={(e) => {
+250:                  e.stopPropagation();
+251:                  setPlayerClicks(v => v + 1);
+252:                  window.open('https://www.effectivecpmnetwork.com/aqvr5qwv9?key=04dcea856855796b247a2fd6bce092ca', '_blank');
+253:               }}
+254:            />
+255:         )}
+256:         
+257:         {/* Video/Iframe Element */}
+258:         {(currentType === 'hls' || currentType === 'mp4') ? (
+259:            <video ref={videoRef} className="w-full h-full object-contain" crossOrigin="anonymous" playsInline />
+260:         ) : (
+261:            renderIframe()
+262:         )}
+263:         
+264:         {/* Loading Overlay */}
+265:         {loading && (
+266:            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 pointer-events-none">
+267:               <Loader2 className="w-12 h-12 text-[#22c55e] animate-spin mb-4" />
+268:               <p className="text-white font-bold text-lg tracking-widest drop-shadow-md">
+269:                  {lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+270:               </p>
+271:            </div>
+272:         )}
+273:         
+274:         {/* Error Overlay */}
+275:         {error && (
+276:            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md">
+277:               <AlertCircle className="w-14 h-14 text-red-500 mb-4 drop-shadow-md" />
+278:               <p className="text-white font-bold text-lg mb-6 text-center px-4">
+279:                  {error || (lang === 'ar' ? 'حدث خطأ في تشغيل السيرفر المختار' : 'Error playing the selected server')}
+280:               </p>
+281:               <button onClick={handleRetry} className="bg-[#22c55e] text-[#0a0e17] font-bold px-6 py-2.5 rounded-full flex items-center gap-2 hover:bg-[#1ea34f] transition-all">
+282:                  <RotateCw className="w-5 h-5" />
+283:                  {lang === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+284:               </button>
+285:            </div>
+286:         )}
+287:      </div>
+289:      {/* Ads and Servers Container */}
+290:      <div className="h-auto max-h-[40vh] shrink-0 bg-[#0a0e17] flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden">
+291:        
+292:        {/* Top banner */}
+293:        <div className="w-full flex justify-center py-2 px-4 shrink-0 bg-[#0a0e17]">
+294:        </div>
+296:        {/* Servers Rack */}
+297:        <div className="px-4 py-3 flex justify-center shrink-0 border-b border-t border-white/5">
+298:          <div className="flex items-center gap-3 w-full max-w-4xl mx-auto flex-wrap justify-center">
+299:            {servers.map((srv, idx) => {
+300:               const isActive = activeServer.url === srv.url;
+301:               return (
+302:                  <button
+303:                    key={srv.id || idx}
+304:                    onClick={(e) => {
+305:                        e.stopPropagation();
+306:                        if(!isActive) {
+307:                           setActiveServer(srv);
+308:                           setLoading(true);
+309:                           setError(null);
+310:                        }
+311:                    }}
+312:                    className={`
+313:                       px-5 py-3 rounded-lg font-bold text-sm transition-all shadow-sm border
+314:                       ${isActive 
+315:                          ? 'bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e] shadow-[0_0_15px_rgba(34,197,94,0.2)]'
+316:                          : 'bg-white/5 text-gray-400 border-transparent hover:bg-white/10 hover:text-white'
+317:                       }
+318:                    `}
+319:                  >
+320:                     {srv.name || (lang === 'ar' ? `سيرفر ${idx + 1}` : `Server ${idx + 1}`)}
+321:                  </button>
+322:               );
+323:            })}
+324:            
+325:            {servers.length === 0 && (
+326:               <p className="text-gray-500 italic font-medium">
+327:                 {lang === 'ar' ? 'لا توجد سيرفرات إضافية' : 'No additional servers'}
+328:               </p>
+329:            )}
+330:          </div>
+331:        </div>
+332:        
+333:        {/* Bottom Ads */}
+334:        <div className="px-4 py-4 shrink-0 flex flex-col items-center gap-4">
+335:        </div>
+336:      </div>
+337:    </div>
+338:  );
+339:}

@@ -1,0 +1,69 @@
+[
+  {
+    "id": "match-1",
+    "status": "live",
+    "matchTime": "34'",
+    "date": "2026-06-11T16:00:00Z",
+    "stadium": "Levi's Stadium",
+    "homeTeam": { "name": "المغرب", "flag": "🇲🇦", "score": 1 },
+    "awayTeam": { "name": "الأرجنتين", "flag": "🇦🇷", "score": 0 },
+    "streams": [
+      {
+        "id": "stream-1-1",
+        "name": "سيرفر 1",
+        "type": "auto",
+        "url": "https://www.youtube.com/live/36YnV9STBqc?si=t2-04jeAok-wMNni&cbrd=1&ucbcb=1&referring_app=com.apple.mobilesafari-smartbanner,"
+      },
+      {
+        "id": "stream-1-2",
+        "name": "سيرفر 2",
+        "type": "auto",
+        "url": "https://www.youtube.com/watch?v=36YnV9STBqc"
+      }
+    ]
+  },
+  {
+    "id": "match-2",
+    "status": "live",
+    "matchTime": "67'",
+    "date": "2026-06-11T19:00:00Z",
+    "stadium": "MetLife Stadium",
+    "homeTeam": { "name": "مصر", "flag": "🇪🇬", "score": 1 },
+    "awayTeam": { "name": "فرنسا", "flag": "🇫🇷", "score": 1 },
+    "streams": [
+      {
+        "id": "stream-2-1",
+        "name": "سيرفر 1",
+        "type": "iframe",
+        "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"
+      }
+    ]
+  },
+  {
+    "id": "match-3",
+    "status": "upcoming",
+    "matchTime": null,
+    "date": "2026-06-12T16:00:00Z",
+    "stadium": "Azteca Stadium",
+    "homeTeam": { "name": "السعودية", "flag": "🇸🇦", "score": null },
+    "awayTeam": { "name": "البرازيل", "flag": "🇧🇷", "score": null },
+    "streams": []
+  },
+  {
+    "id": "match-4",
+    "status": "finished",
+    "matchTime": "FT",
+    "date": "2026-06-10T16:00:00Z",
+    "stadium": "AT&T Stadium",
+    "homeTeam": { "name": "قطر", "flag": "🇶🇦", "score": 0 },
+    "awayTeam": { "name": "ألمانيا", "flag": "🇩🇪", "score": 2 },
+    "streams": [
+      {
+        "id": "stream-4-1",
+        "name": "سيرفر 1",
+        "type": "auto",
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+      }
+    ]
+  }
+]

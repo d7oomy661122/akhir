@@ -1,0 +1,28 @@
+{
+  "matches": [
+    {
+      "homeTeam": "South Africa",
+      "awayTeam": "Mexico",
+      "servers": [
+        {
+          "id": "srv1",
+          "name": "سيرفر 1",
+          "url": "https://www.facebook.com/Reuters/videos/2490261414782169/?mibextid=rS40aB7S9Ucbxw6v",
+          "language": "عربي"
+        }
+      ]
+    },
+    {
+      "homeTeam": "England",
+      "awayTeam": "Costa Rica",
+      "servers": [
+        {
+          "id": "srv1",
+          "name": "سيرفر 1",
+          "url": "https://www.youtube.com/embed/live_stream?channel=UCEXAMPLE1",
+          "language": "عربي"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Tajawal:wght@400;500;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Tajawal", system-ui, sans-serif;
+  --font-heading: "Outfit", system-ui, sans-serif;
+  --color-brand-bg: #0f0f13;
+  --color-brand-ui: #8b5cf6;
+  --color-brand-live: #ef4444;
+}
+
+body {
+  background: linear-gradient(to bottom right, #C77DFF, #9D4EDD, #4B0082);
+  background-attachment: fixed;
+  background-size: cover;
+  background-repeat: no-repeat;
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: #f4f4f5;
+  font-family: var(--font-sans);
+}
+
+body.dark {
+  background: #0f0f13;
+}
+
+/* Glassmorphism utility */
+@layer utilities {
+  .glass {
+    @apply bg-[#1a1a24] border border-[#2a2a3a];
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Hide scrollbar for cleaner look */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f0f13;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a3a;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://livefootball365.org/sitemap.xml
+Crawl-delay: 1
