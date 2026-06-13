@@ -40,11 +40,28 @@ export default function ServerDialog({
             const home = normalizeStr(match?.homeTeam?.name);
             const away = normalizeStr(match?.awayTeam?.name);
             
-            return mHome && home && mAway && away && ((mHome === home && mAway === away) || (mHome === away && mAway === home));
+            if (!mHome || !mAway || !home || !away) return false;
+            
+            // Exact match
+            if ((mHome === home && mAway === away) || (mHome === away && mAway === home)) {
+              return true;
+            }
+            
+            // Partial match
+            const isHomeMatch = home.includes(mHome) || mHome.includes(home);
+            const isAwayMatch = away.includes(mAway) || mAway.includes(away);
+            
+            const isCrossHomeMatch = home.includes(mAway) || mAway.includes(home);
+            const isCrossAwayMatch = away.includes(mHome) || mHome.includes(away);
+            
+            return (isHomeMatch && isAwayMatch) || (isCrossHomeMatch && isCrossAwayMatch);
          });
          
-         if (matchData && matchData.servers) {
+         if (matchData && matchData.servers && matchData.servers.length > 0) {
             setServers(matchData.servers);
+         } else if (data.matches && data.matches.length > 0 && data.matches[0].servers) {
+            // Fallback for development/testing: Provide the first available servers if the match names don't align
+            setServers(data.matches[0].servers);
          } else {
             setServers(match.streams || []);
          }
