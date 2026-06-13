@@ -3,6 +3,8 @@ import { ArrowRight, Loader2, MonitorPlay, Radio, Maximize, Minimize, Volume2, V
 import screenfull from 'screenfull';
 import Hls from 'hls.js';
 import { Match } from '../types';
+import NativeAd from './NativeAd';
+import BannerAd from './BannerAd';
 
 interface UniversalPlayerProps {
   streamUrl: string;
@@ -17,6 +19,8 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
   const [showControls, setShowControls] = useState(true);
   const [volume, setVolume] = useState(70);
   const [muted, setMuted] = useState(true);
+  const [smartlinkClicks, setSmartlinkClicks] = useState(0);
+  const [article, setArticle] = useState<any>(null);
   
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -29,6 +33,47 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
   const isM3U8 = streamUrl.includes('.m3u8');
   
   const isDirectVideo = isM3U8 || streamUrl.includes('.mp4') || (!isYouTube && !isFacebook && !streamUrl.includes('embed'));
+
+  useEffect(() => {
+    // Popunder script
+    const script = document.createElement('script');
+    script.src = 'https://pl29738089.effectivecpmnetwork.com/4e/06/86/4e0686b18c688b9700d75da5c61d83de.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (match) {
+       fetch('/articles.json?t=' + new Date().getTime())
+         .then(res => res.json())
+         .then(data => {
+            const normalizeStr = (str?: string) => {
+              if (!str) return '';
+              return str.toLowerCase().trim()
+                .replace(/[أإآا]/g, 'ا')
+                .replace(/[ةه]/g, 'ه')
+                .replace(/[^a-z0-9ا-ي]/g, '');
+            };
+            const home = normalizeStr(match.homeTeam.name);
+            const away = normalizeStr(match.awayTeam.name);
+            
+            const matchArticle = data.matches?.find((a: any) => {
+               const aHome = normalizeStr(a.homeTeam);
+               const aAway = normalizeStr(a.awayTeam);
+               return (aHome === home && aAway === away) || (aHome === away && aAway === home);
+            });
+            if (matchArticle) {
+               setArticle(matchArticle);
+            }
+         }).catch(err => console.error("Error fetching articles:", err));
+    }
+  }, [match]);
 
   useEffect(() => {
     if (!isDirectVideo || !videoRef.current) return;
@@ -145,6 +190,12 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
     }
   };
 
+  const handleSmartlinkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    window.open('https://www.effectivecpmnetwork.com/fp02durynf?key=5b9d3cdec238be9bb40d4da0e6df82c8', '_blank');
+    setSmartlinkClicks(c => c + 1);
+  };
+
   let embedUrl = streamUrl;
   if (isYouTube) {
     let vId = '';
@@ -154,18 +205,20 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
     else if (streamUrl.includes('youtube.com/live/')) vId = streamUrl.split('live/')[1]?.split('?')[0];
     embedUrl = `https://www.youtube.com/embed/${vId}?autoplay=1&mute=1&playsinline=1&controls=0&rel=0&enablejsapi=1`;
   } else if (isFacebook) {
-    embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(streamUrl)}&show_text=false&mute=1&autoplay=1`;
+    // Add width=1920 to force Facebook to render a large fluid video instead of a small default sized player
+    embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(streamUrl)}&show_text=false&mute=1&autoplay=1&width=1920`;
   }
 
   return (
-    <div role="main" className="fixed inset-0 w-full h-[100dvh] bg-black overflow-y-auto overflow-x-hidden z-[100] flex flex-col font-sans" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <div className={`w-full relative flex items-center justify-center shrink-0 ${isFullscreen ? 'flex-1 h-[100dvh] p-0' : 'flex-1 min-h-[100dvh] p-2 sm:p-6 md:p-8'}`}>
+    <div role="main" className="fixed inset-0 w-full h-[100dvh] bg-[#09090b] overflow-y-auto overflow-x-hidden z-[100] flex flex-col font-sans relative" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+      {/* Container for Player */}
+      <div className={`w-full flex justify-center shrink-0 ${isFullscreen ? 'flex-1 h-[100dvh] bg-black relative z-[150]' : 'w-full max-w-[1200px] mx-auto bg-black relative z-[10]'}`}>
         <div 
           ref={playerContainerRef}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           onClick={() => setShowControls(c => !c)}
-          className={`w-full aspect-video bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)] relative group mx-auto flex items-center justify-center overflow-hidden ${isFullscreen ? 'max-w-none border-none h-full rounded-none' : 'max-w-6xl rounded-[20px] border border-white/10 max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)]'}`}
+          className={`w-full bg-black shadow-[0_0_50px_rgba(0,0,0,0.5)] relative group flex items-center justify-center overflow-hidden ${isFullscreen ? 'h-[100dvh] max-w-none border-none rounded-none' : 'aspect-video lg:rounded-b-2xl border-b border-white/10'}`}
         >
           {loading && (
              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#09090b]">
@@ -184,16 +237,17 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
                playsInline
                muted={muted}
              />
-          ) : (
+          ) : isYouTube ? (
+             /* YouTube embed with zoom to remove black bars */
              <div 
-               className="absolute z-10 pointer-events-auto flex items-center justify-center bg-black"
+               className="absolute z-10 pointer-events-auto flex items-center justify-center bg-black overflow-hidden"
                style={{
-                 top: isFacebook ? '-15%' : isYouTube ? '-20%' : '0',
-                 bottom: isFacebook ? '-15%' : isYouTube ? '-20%' : '0',
-                 left: isFacebook ? '-15%' : isYouTube ? '-20%' : '0',
-                 right: isFacebook ? '-15%' : isYouTube ? '-20%' : '0',
-                 width: isFacebook || isYouTube ? 'auto' : '100%',
-                 height: isFacebook || isYouTube ? 'auto' : '100%',
+                 top: '-20%',
+                 bottom: '-20%',
+                 left: '-20%',
+                 right: '-20%',
+                 width: 'auto',
+                 height: 'auto',
                }}
              >
                 <iframe 
@@ -204,6 +258,19 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
                   allowFullScreen
                   onLoad={() => setLoading(false)}
                 />
+             </div>
+          ) : (
+             /* Facebook embed - fills entire player area */
+             <div className="absolute inset-0 z-10 pointer-events-auto bg-black overflow-hidden flex items-center justify-center">
+               <iframe
+                 ref={iframeRef}
+                 src={embedUrl}
+                 className="w-full h-full border-none pointer-events-auto"
+                 style={{ width: '100%', height: '100%' }}
+                 allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                 allowFullScreen
+                 onLoad={() => setLoading(false)}
+               />
              </div>
           )}
 
@@ -277,8 +344,49 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
                 </button>
              </div>
           </div>
+
+           {/* Smartlink Protection Layer - intercepts clicks on the player for the first 4 interactions */}
+           {smartlinkClicks < 4 && (
+             <div 
+               className="absolute inset-0 z-[60] cursor-pointer"
+               onClick={handleSmartlinkClick}
+             />
+           )}
         </div>
       </div>
+
+      {/* Page Content Below Player (Only visible when not fullscreen) */}
+      {!isFullscreen && (
+        <div className="flex-1 w-full max-w-[1000px] mx-auto px-4 py-6 flex flex-col gap-6 relative z-[5]">
+           <BannerAd adKey="7ff537aca41d7629056c9441408a80b6" width={320} height={50} />
+
+           {article ? (
+              <article className="bg-[#121217] rounded-3xl p-6 sm:p-8 border border-white/5 shadow-xl text-white">
+                 <h1 className="text-2xl sm:text-3xl font-black mb-6 text-[#00ff88] drop-shadow-sm leading-tight tracking-tight">
+                    {article.title}
+                 </h1>
+                 <div 
+                    className="text-gray-300 text-sm sm:text-base leading-relaxed space-y-4 [&>p]:mb-4"
+                    dangerouslySetInnerHTML={{ __html: article.content }}
+                 />
+              </article>
+           ) : match ? (
+              <div className="bg-[#121217] rounded-3xl p-6 sm:p-8 border border-white/5 shadow-xl flex flex-col items-center justify-center text-center gap-4">
+                 <div className="flex items-center gap-6 mb-2">
+                    {match.homeTeam.flag ? <img src={match.homeTeam.flag} alt={match.homeTeam.name} className="w-16 h-16 object-contain shadow-sm" /> : null}
+                    <span className="text-3xl font-black text-white/30 drop-shadow-md">VS</span>
+                    {match.awayTeam.flag ? <img src={match.awayTeam.flag} alt={match.awayTeam.name} className="w-16 h-16 object-contain shadow-sm" /> : null}
+                 </div>
+                 <h2 className="text-xl sm:text-2xl font-bold text-white tracking-wide">
+                    {match.homeTeam.name} {lang === 'ar' ? 'ضد' : 'vs'} {match.awayTeam.name}
+                 </h2>
+              </div>
+           ) : null}
+
+           <NativeAd />
+           
+        </div>
+      )}
     </div>
   );
 }
