@@ -9,6 +9,36 @@
           "name": "سيرفر 1",
           "url": "https://www.youtube.com/live/NEVN713ue-s?si=yfrtbGDL7LgwTl_N",
           "language": "عربي"
+        },
+        {
+          "id": "srv2",
+          "name": "سيرفر 2",
+          "url": "https://www.youtube.com/live/NEVN713ue-s?si=yfrtbGDL7LgwTl_N",
+          "language": "عربي"
+        },
+        {
+          "id": "srv3",
+          "name": "سيرفر 3",
+          "url": "https://www.youtube.com/live/NEVN713ue-s?si=yfrtbGDL7LgwTl_N",
+          "language": "عربي"
+        },
+        {
+          "id": "srv4",
+          "name": "سيرفر 4",
+          "url": "https://www.youtube.com/live/NEVN713ue-s?si=yfrtbGDL7LgwTl_N",
+          "language": "عربي"
+        },
+        {
+          "id": "srv5",
+          "name": "سيرفر 5",
+          "url": "https://www.youtube.com/live/NEVN713ue-s?si=yfrtbGDL7LgwTl_N",
+          "language": "عربي"
+        },
+        {
+          "id": "srv6",
+          "name": "سيرفر 6",
+          "url": "https://www.youtube.com/live/NEVN713ue-s?si=yfrtbGDL7LgwTl_N",
+          "language": "عربي"
         }
       ]
     },
