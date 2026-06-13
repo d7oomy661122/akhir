@@ -190,7 +190,7 @@ export default function MatchList({
                 lang={lang}
                 theme={theme}
                 onClick={() => {
-                  if (match.status === 'live') {
+                  if (match.status === 'live' || match.status === 'upcoming') {
                     onSelect(match);
                   }
                 }}
