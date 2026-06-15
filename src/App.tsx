@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import Header from './components/Header';
 import MatchList from './components/MatchList';
 import ServerDialog from './components/ServerDialog';
-import PlayerPage from './components/PlayerPage';
 import BannerAd from './components/BannerAd';
 import SubscribeDialog from './components/SubscribeDialog';
+import UniversalPlayer from './components/UniversalPlayer';
 import { AnimatePresence } from 'motion/react';
 import { Match, Stream } from './types';
 import { useMatches } from './hooks/useMatches';
@@ -54,21 +55,26 @@ export default function App() {
     if (match.status === 'live') {
       setDialogMatch(match);
     } else if (match.status === 'upcoming') {
-      setDialogMatch(match); // Allow testing servers for upcoming matches
+      const matchDate = new Date(match.date);
+      const now = new Date();
+      const diffHours = (matchDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      if (diffHours <= 3 || isNaN(diffHours)) {
+        setDialogMatch(match);
+      }
     }
   };
 
   const handleServerSelect = (stream: Stream) => {
+    const currentMatch = dialogMatch;
     setDialogMatch(null);
     setPageLoading(true);
     
-    // Simulate professional loading delay for connection setup
     setTimeout(() => {
       setActiveStream(stream);
-      setActiveMatch(dialogMatch);
+      setActiveMatch(currentMatch);
       setView('player');
       setPageLoading(false);
-    }, 1500);
+    }, 300);
   };
 
   const handleBack = () => {
@@ -85,7 +91,6 @@ export default function App() {
 
   return (
     <div className="min-h-[100dvh] font-sans flex flex-col relative" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      {/* Background Overlay for a modern aesthetic */}
       <div className="fixed inset-0 bg-black/5 pointer-events-none" />
 
       <Header 
@@ -108,9 +113,9 @@ export default function App() {
                     </p>
                  </div>
               ) : (
-                <PlayerPage 
-                  match={activeMatch} 
-                  stream={activeStream}
+                <UniversalPlayer 
+                  streamUrl={activeStream.url}
+                  match={activeMatch}
                   lang={lang}
                   onBack={handleBack}
                 />
@@ -130,7 +135,7 @@ export default function App() {
                    <div className="flex-1 flex flex-col items-center justify-center py-20">
                       <div className="w-10 h-10 border-4 border-[#9D4EDD] border-t-transparent rounded-full animate-spin mb-4"></div>
                       <p className={cn("font-bold tracking-widest", theme === 'dark' ? 'text-white' : 'text-[#4B0082]')}>
-                        {lang === 'ar' ? 'جاري التحميل...' : 'LOADING...'}
+                        {lang === 'ar' ? 'جاري التحضير...' : 'LOADING...'}
                       </p>
                    </div>
                 ) : error && matches.length === 0 ? (
