@@ -21,10 +21,10 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
   const [muted, setMuted] = useState(true);
   const [smartlinkClicks, setSmartlinkClicks] = useState(0);
   const [article, setArticle] = useState<any>(null);
+  const [error, setError] = useState(false);
   
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Detect type
@@ -33,6 +33,7 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
   const isM3U8 = streamUrl.includes('.m3u8');
   
   const isDirectVideo = isM3U8 || streamUrl.includes('.mp4') || (!isYouTube && !isFacebook && !streamUrl.includes('embed'));
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     // Popunder script
@@ -66,7 +67,15 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
             const matchArticle = data.matches?.find((a: any) => {
                const aHome = normalizeStr(a.homeTeam);
                const aAway = normalizeStr(a.awayTeam);
-               return (aHome === home && aAway === away) || (aHome === away && aAway === home);
+               if (!aHome || !aAway || !home || !away) return false;
+               
+               const isHomeMatch = home.includes(aHome) || aHome.includes(home);
+               const isAwayMatch = away.includes(aAway) || aAway.includes(away);
+               
+               const isHomeAwayCross = home.includes(aAway) || aAway.includes(home);
+               const isAwayHomeCross = away.includes(aHome) || aHome.includes(away);
+               
+               return (isHomeMatch && isAwayMatch) || (isHomeAwayCross && isAwayHomeCross);
             });
             if (matchArticle) {
                setArticle(matchArticle);
@@ -76,40 +85,83 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
   }, [match]);
 
   useEffect(() => {
-    if (!isDirectVideo || !videoRef.current) return;
+    if (!videoRef.current) return;
 
     let hls: Hls | null = null;
     const video = videoRef.current;
 
     setLoading(true);
+    setError(false);
 
-    if (Hls.isSupported() && isM3U8) {
-      hls = new Hls({ lowLatencyMode: true, backBufferLength: 90 });
+    if (Hls.isSupported() && streamUrl.includes('.m3u8')) {
+      hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 600,
+        maxBufferSize: 60 * 1000 * 1000,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 10,
+        fragLoadingMaxRetry: 5,
+        manifestLoadingMaxRetry: 5,
+        levelLoadingMaxRetry: 5,
+        xhrSetup: function(xhr, url) {
+           if (url.startsWith('http') && !url.includes(window.location.origin)) {
+             xhr.open('GET', '/api/proxy?url=' + encodeURIComponent(url));
+           }
+        }
+      });
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setLoading(false);
         if (!muted) video.muted = false;
-        video.play().catch(e => console.log('Autoplay prevented:', e));
+        video.play().catch((e) => console.log('Autoplay prevented:', e));
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) setLoading(false);
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log('fatal network error encountered, try to recover');
+              hls?.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log('fatal media error encountered, try to recover');
+              hls?.recoverMediaError();
+              break;
+            default:
+              console.log('fatal error, cannot recover');
+              hls?.destroy();
+              setLoading(false);
+              setError(true);
+              break;
+          }
+        }
       });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl') || streamUrl.includes('.mp4')) {
-      video.src = streamUrl;
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native Safari
+      video.src = streamUrl.startsWith('http') && !streamUrl.includes(window.location.origin) 
+        ? '/api/proxy?url=' + encodeURIComponent(streamUrl) 
+        : streamUrl;
       video.addEventListener('loadedmetadata', () => {
         setLoading(false);
         if (!muted) video.muted = false;
-        video.play().catch(e => console.log('Autoplay prevented:', e));
+        video.play().catch((e) => console.log('Autoplay prevented:', e));
+      });
+      video.addEventListener('error', () => {
+        setLoading(false);
+        setError(true);
       });
     } else {
       setLoading(false);
+      setError(true);
     }
 
     return () => {
       if (hls) hls.destroy();
     };
-  }, [streamUrl, isDirectVideo, isM3U8, muted]);
+  }, [streamUrl, muted]);
 
   const handleToggleFullscreen = () => {
     if (screenfull.isEnabled && playerContainerRef.current) {
@@ -141,29 +193,19 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
     setShowControls(false);
   };
 
-  const postMessageToPlayer = (func: string, args: any[]) => {
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
-    }
-  };
-
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVol = parseInt(e.target.value, 10);
     setVolume(newVol);
     
-    if (isDirectVideo && videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.volume = newVol / 100;
       videoRef.current.muted = newVol === 0;
-    } else {
-      postMessageToPlayer('setVolume', [newVol]);
     }
     
     if (newVol > 0 && muted) {
       setMuted(false);
-      postMessageToPlayer('unMute', []);
     } else if (newVol === 0 && !muted) {
       setMuted(true);
-      postMessageToPlayer('mute', []);
     }
   };
 
@@ -171,21 +213,16 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
     const newMuted = !muted;
     setMuted(newMuted);
     
-    if (isDirectVideo && videoRef.current) {
+    if (videoRef.current) {
       videoRef.current.muted = newMuted;
     }
     
-    if (newMuted) {
-      postMessageToPlayer('mute', []);
-    } else {
-      postMessageToPlayer('unMute', []);
+    if (!newMuted) {
       if (volume === 0) {
         setVolume(70);
-        if (isDirectVideo && videoRef.current) videoRef.current.volume = 0.7;
-        postMessageToPlayer('setVolume', [70]);
+        if (videoRef.current) videoRef.current.volume = 0.7;
       } else {
-        if (isDirectVideo && videoRef.current) videoRef.current.volume = volume / 100;
-        postMessageToPlayer('setVolume', [volume]);
+        if (videoRef.current) videoRef.current.volume = volume / 100;
       }
     }
   };
@@ -203,9 +240,11 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
     else if (streamUrl.includes('youtu.be/')) vId = streamUrl.split('youtu.be/')[1]?.split('?')[0];
     else if (streamUrl.includes('youtube.com/embed/')) vId = streamUrl.split('embed/')[1]?.split('?')[0];
     else if (streamUrl.includes('youtube.com/live/')) vId = streamUrl.split('live/')[1]?.split('?')[0];
-    embedUrl = `https://www.youtube.com/embed/${vId}?autoplay=1&mute=1&playsinline=1&controls=0&rel=0&enablejsapi=1`;
+    
+    if (vId) {
+      embedUrl = `https://www.youtube.com/embed/${vId}?autoplay=1&mute=1&playsinline=1&controls=1&rel=0&enablejsapi=1`;
+    }
   } else if (isFacebook) {
-    // Add width=1920 to force Facebook to render a large fluid video instead of a small default sized player
     embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(streamUrl)}&show_text=false&mute=1&autoplay=1&width=1920`;
   }
 
@@ -229,7 +268,14 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
              </div>
           )}
 
-          {isDirectVideo ? (
+          {error ? (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#09090b]">
+              <span className="text-4xl mb-3 text-white">⚠️</span>
+              <p className="text-white/70 font-bold tracking-widest text-xs sm:text-sm">
+                {lang === 'ar' ? 'حدث خطأ في تشغيل البث' : 'STREAM ERROR'}
+              </p>
+            </div>
+          ) : isDirectVideo ? (
              <video
                ref={videoRef}
                className="absolute inset-0 w-full h-full object-contain z-10 pointer-events-auto bg-black"
@@ -238,17 +284,9 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
                muted={muted}
              />
           ) : isYouTube ? (
-             /* YouTube embed with zoom to remove black bars */
              <div 
                className="absolute z-10 pointer-events-auto flex items-center justify-center bg-black overflow-hidden"
-               style={{
-                 top: '-20%',
-                 bottom: '-20%',
-                 left: '-20%',
-                 right: '-20%',
-                 width: 'auto',
-                 height: 'auto',
-               }}
+               style={{ top: '-20%', bottom: '-20%', left: '-20%', right: '-20%', width: 'auto', height: 'auto' }}
              >
                 <iframe 
                   ref={iframeRef}
@@ -260,7 +298,6 @@ export default function UniversalPlayer({ streamUrl, onBack, lang, match }: Univ
                 />
              </div>
           ) : (
-             /* Facebook embed - fills entire player area */
              <div className="absolute inset-0 z-10 pointer-events-auto bg-black overflow-hidden flex items-center justify-center">
                <iframe
                  ref={iframeRef}
