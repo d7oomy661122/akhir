@@ -42,25 +42,19 @@ export default function ServerDialog({
             
             if (!mHome || !mAway || !home || !away) return false;
             
-            // Exact match
-            if ((mHome === home && mAway === away) || (mHome === away && mAway === home)) {
-              return true;
-            }
-            
-            // Partial match
             const isHomeMatch = home.includes(mHome) || mHome.includes(home);
             const isAwayMatch = away.includes(mAway) || mAway.includes(away);
             
-            const isCrossHomeMatch = home.includes(mAway) || mAway.includes(home);
-            const isCrossAwayMatch = away.includes(mHome) || mHome.includes(away);
+            const isHomeAwayCross = home.includes(mAway) || mAway.includes(home);
+            const isAwayHomeCross = away.includes(mHome) || mHome.includes(away);
             
-            return (isHomeMatch && isAwayMatch) || (isCrossHomeMatch && isCrossAwayMatch);
+            return (isHomeMatch && isAwayMatch) || (isHomeAwayCross && isAwayHomeCross);
          });
          
          if (matchData && matchData.servers && matchData.servers.length > 0) {
             setServers(matchData.servers);
          } else if (data.matches && data.matches.length > 0 && data.matches[0].servers) {
-            // Fallback for development/testing: Provide the first available servers if the match names don't align
+            // Fallback to first match servers for easy testing
             setServers(data.matches[0].servers);
          } else {
             setServers(match.streams || []);
